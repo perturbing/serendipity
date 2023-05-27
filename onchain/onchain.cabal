@@ -1,0 +1,27 @@
+cabal-version:      3.0
+name:               onchain
+version:            0.1.0.0
+license:            Apache-2.0
+license-file:       LICENSE
+author:             perturbing
+maintainer:         thomas.vellekoop@iohk.io
+build-type:         Simple
+
+common basic
+    build-depends:    base ^>=4.14.3.0
+                    , serialise
+                    , bytestring
+                    , cardano-api
+                    , plutus-ledger-api
+                    , plutus-tx 
+                    , plutus-tx-plugin
+                    , utilities
+    ghc-options: -Wall -fobject-code -fno-ignore-interface-pragmas
+                 -fno-omit-interface-pragmas -fno-strictness 
+                 -fno-spec-constr -fno-specialise -fexpose-all-unfoldings
+                 -fplugin-opt PlutusTx.Plugin:defer-errors
+library
+    import:           basic
+    hs-source-dirs:   src
+    exposed-modules:  Validator
+    default-language: Haskell2010
