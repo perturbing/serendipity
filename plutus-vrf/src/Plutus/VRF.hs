@@ -24,10 +24,9 @@ makeIsDataIndexed ''PubKey [('PubKey,0)]
 newtype Gamma = Gamma BuiltinByteString
 makeIsDataIndexed ''Gamma [('Gamma,0)]
 
--- | A standin type for representing a non interactive proof in the above 
+-- | A type for representing a non interactive proof in the above 
 -- standard (normally this contains c and s)
--- now this is just a ECDSA over SECP256k1 of gamma under a public key
-newtype ZKProof = ZKProof BuiltinByteString
+data ZKProof = ZKProof BuiltinByteString BuiltinByteString
 makeIsDataIndexed ''ZKProof [('ZKProof,0)]
 
 -- | A type for representing a VRF Proof.
@@ -37,15 +36,14 @@ makeIsDataIndexed ''ZKProof [('ZKProof,0)]
 data Proof = Proof Gamma ZKProof
 makeIsDataIndexed ''Proof [('Proof,0)]
 
--- | This is currently not a propper VRF! It just emulates the behaviour of one 
--- in a insecure way. This implementation is insecure since the output is a hash
--- of gamma, which is not uniformly distributed. Secondly, the outputs are predicable
--- given a public key. So this function is not even random!
+-- | This is currently not a proper VRF! It just emulates the behaviour of one 
+-- in a insecure way. This implementation is insecure because the output is a hash
+-- of the input concatenated with the public key, which is not uniformly distributed.
+-- Secondly, the outputs are predicable given a public key. So this function is not even random! 
+-- Replace this when CIP 381 is implemented in plutus. For a proper VRF consider the following gist
+-- https://gist.github.com/perturbing/ebde137286944b30b1de2277cfaf1c5a
 {-# INLINEABLE verifyVRF #-}
 verifyVRF :: Input -> Output -> PubKey -> Proof -> Bool
-verifyVRF (Input inBs) (Output outBs) (PubKey pk) (Proof _ (ZKProof proofBs)) =
-    verifyEcdsaSecp256k1Signature pk gamma proofBs && outBs == blake2b_256 gamma
-    where
-        gamma = blake2b_256 (inBs <> pk)
+verifyVRF (Input inBs) (Output outBs) (PubKey pk) _ = outBs == blake2b_256 (inBs <> pk)
 
         
