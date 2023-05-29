@@ -7,6 +7,7 @@
 
 module Validator where
 
+import Plutus.VRF
 import PlutusLedgerApi.V2.Contexts ( ScriptContext )
 import PlutusTx.Prelude ( Bool(True))
 import PlutusLedgerApi.Common ()

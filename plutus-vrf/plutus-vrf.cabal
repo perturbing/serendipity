@@ -7,7 +7,10 @@ author:             perturbing
 maintainer:         thomas.vellekoop@iohk.io
 build-type:         Simple
 
-common basic
+library
+    exposed-modules:  Plutus.VRF
+    hs-source-dirs:   src
+    default-language: Haskell2010
     build-depends:    base ^>=4.14.3.0
                     , cardano-api
                     , plutus-ledger-api
@@ -16,8 +19,3 @@ common basic
                  -fno-omit-interface-pragmas -fno-strictness 
                  -fno-spec-constr -fno-specialise -fexpose-all-unfoldings
                  -fplugin-opt PlutusTx.Plugin:defer-errors
-library
-    import:           basic
-    exposed-modules:  VRF
-    hs-source-dirs:   src
-    default-language: Haskell2010
