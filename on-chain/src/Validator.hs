@@ -11,7 +11,7 @@ module Validator where
 import Plutus.VRF ( verifyVRF, Proof, Input (Input), Output (Output), PubKey (PubKey) )
 import PlutusLedgerApi.V2.Contexts ( ScriptContext, TxId (..) )
 import PlutusTx.Prelude
-    ( Bool(..), (&&), BuiltinByteString, error, ($), (<>), Integer, (-) )
+    ( Bool(..), (&&), BuiltinByteString, error, ($), (<>), Integer, (-), traceError, traceIfFalse )
 import PlutusLedgerApi.Common ()
 import PlutusTx ( BuiltinData, compile, CompiledCode )
 import Utilities (writeCodeToFile, wrapValidator, i2osp)
@@ -28,7 +28,7 @@ testValidator _dtm (proof1,_proof2) ctx = checkSerendipity && checkCorrectOutput
     where
         -- Checks that the referenced VRF pkh with stake is allowed to unlock the output
         checkSerendipity :: Bool
-        checkSerendipity = verifyVRF (Input ownRefBS) (Output (blake2b_256 (ownRefBS <> pkh <> i2osp txValidRangeDiff))) (PubKey pkh) proof1 
+        checkSerendipity = traceIfFalse "vrf-fail" $ verifyVRF (Input ownRefBS) (Output (blake2b_256 (ownRefBS <> pkh))) (PubKey pkh) proof1 
         --checkSerendipity = True
 
         -- Checks that the reference VRF PKH hashes the Input correctly
@@ -52,7 +52,7 @@ testValidator _dtm (proof1,_proof2) ctx = checkSerendipity && checkCorrectOutput
             where 
                 getDifference :: POSIXTimeRange -> Integer
                 getDifference Interval{ivFrom=(LowerBound (Finite a) _), ivTo=(UpperBound (Finite b) _)} = getPOSIXTime $ b - a
-                getDifference _ = error ()
+                getDifference _ = traceError "Trace error: validity interval incorrect"
 
         pkh :: BuiltinByteString 
         pkh = i2osp 0x00
@@ -65,5 +65,5 @@ mkWrappedValidator = wrapValidator testValidator
 validatorCode :: CompiledCode (BuiltinData -> BuiltinData -> BuiltinData -> ())
 validatorCode = $$(compile [|| mkWrappedValidator ||])
 
-saveFreePolicy :: IO ()
-saveFreePolicy = writeCodeToFile "../assets/test.plutus" validatorCode
+saveValidatorPolicy :: IO ()
+saveValidatorPolicy = writeCodeToFile "../assets/test.plutus" validatorCode
