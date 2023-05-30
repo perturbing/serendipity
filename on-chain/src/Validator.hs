@@ -11,7 +11,7 @@ module Validator where
 import Plutus.VRF ( verifyVRF, Proof, Input (Input), Output (Output), PubKey (PubKey) )
 import PlutusLedgerApi.V2.Contexts ( ScriptContext, TxId (..) )
 import PlutusTx.Prelude
-    ( Bool(..), (&&), BuiltinByteString, error, ($), (<>), Integer, (-), traceError, traceIfFalse )
+    ( Bool(..), (&&), BuiltinByteString, error, ($), (<>), (>=), Integer, (-), traceError, traceIfFalse )
 import PlutusLedgerApi.Common ()
 import PlutusTx ( BuiltinData, compile, CompiledCode )
 import Utilities (writeCodeToFile, wrapValidator, i2osp)
@@ -28,8 +28,7 @@ testValidator _dtm (proof1,_proof2) ctx = checkSerendipity && checkCorrectOutput
     where
         -- Checks that the referenced VRF pkh with stake is allowed to unlock the output
         checkSerendipity :: Bool
-        checkSerendipity = traceIfFalse "vrf-fail" $ verifyVRF (Input ownRefBS) (Output (blake2b_256 (ownRefBS <> pkh))) (PubKey pkh) proof1 
-        --checkSerendipity = True
+        checkSerendipity = verifyVRF (Input ownRefBS) (Output (blake2b_256 (ownRefBS <> pkh))) (PubKey pkh) proof1 && txValidRangeDiff >= 1020000
 
         -- Checks that the reference VRF PKH hashes the Input correctly
         checkCorrectOutput :: Bool

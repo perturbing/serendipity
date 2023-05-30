@@ -78,4 +78,4 @@ async function unlockState(txHash:string) {
 }
 
 //console.log(await initState());
-console.log(await unlockState("34f5001b678eaa2bea9abfe397681f6bd38956a00e06568d91cc95fe54c73524"))
+console.log(await unlockState("504f44858c59b60a31618c5a2089723d8da68825ac773493df9460faa0d3971e"))
