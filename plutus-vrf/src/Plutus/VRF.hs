@@ -1,6 +1,7 @@
 {-# LANGUAGE TemplateHaskell #-}
 {-# LANGUAGE DataKinds         #-}
 {-# LANGUAGE NoImplicitPrelude #-}
+{-# LANGUAGE OverloadedStrings #-}
 
 module Plutus.VRF where
 
@@ -53,6 +54,6 @@ makeIsDataIndexed ''Proof [('Proof,0)]
 verifyVRF :: Input -> Output -> PubKey -> Proof -> Bool
 -- verifyVRF (Input inBs) (Output outBs) (PubKey pk) _ = outBs == blake2b_256 (inBs <> pk)
 verifyVRF (Input inBs) (Output outBs) (PubKey pk) (Proof (Gamma gammaBs) (ZKProof proofBs)) =
-     verifyEcdsaSecp256k1Signature pk gammaBs proofBs && -- verify that proofBs is a valid signature of the msg hash gammaBs under pk.
-     gammaBs == sha2_256 (inBs <> pk) &&                 -- verify that the msg that was signed, is inBs concatenated with the pk.
-     outBs == blake2b_256 (gammaBs <> proofBs)           -- verify that the outBs is the blake2b hash of the signature and the msg hash
+     traceIfFalse "ECDSA FAIL" (verifyEcdsaSecp256k1Signature pk gammaBs proofBs) && -- verify that proofBs is a valid signature of the msg hash gammaBs under pk.
+     traceIfFalse "msg not input hash" (gammaBs == sha2_256 (inBs <> pk)) &&                 -- verify that the msg that was signed, is inBs concatenated with the pk.
+     traceIfFalse "output not correct" (outBs == blake2b_256 (gammaBs <> proofBs))           -- verify that the outBs is the blake3b hash of the signature and the msg hash

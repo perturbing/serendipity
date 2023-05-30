@@ -1,6 +1,5 @@
 import * as L from "https://deno.land/x/lucid@0.10.5/mod.ts";
-import { sha256 } from "https://denopkg.com/chiefbiiko/sha256@v1.0.0/mod.ts"
-import * as secp from "https://deno.land/x/secp256k1/mod.ts";
+import {vrf_verify, vrf_proof, vrf_key_generate } from "./vrf.ts"
 import * as Types from "./types.ts";
 import { secretSeed } from "./seed.ts";
 
@@ -15,18 +14,7 @@ const lucid: L.Lucid = await L.Lucid.new(
 // set wallet
 lucid.selectWalletFromSeed(secretSeed);
 const addr: L.Address = await lucid.wallet.address();
-const pkh: string = L.getAddressDetails(addr).paymentCredential.hash;
-
-// this function expects a hex string as its input.
-function blake2b_256(input:string) {
-    const bin = L.fromHex(input)
-    return L.toHex(L.C.hash_blake2b256(bin))
-}
-
-// this function expects a Uint8Array as its input.
-function sha_256(input:Uint8Array) {
-    return L.toHex(sha256(input))
-}
+const pkh: string = L.getAddressDetails(addr).paymentCredential?.hash;
 
 // a function that reads an unparametrized plutus script as a file location.
 async function readScript(name: string): Promise<L.MintingPolicy> {
@@ -40,7 +28,6 @@ async function readScript(name: string): Promise<L.MintingPolicy> {
 // reading the VRF test script.
 const lockVRFScript: L.SpendingValidator = await readScript("test.plutus");
 const lockingAddress: L.Address = lucid.utils.validatorToAddress(lockVRFScript);
-console.log(lockingAddress)
 
 async function initState(): Promise<L.TxHash> {
     const tx = await lucid
@@ -54,27 +41,36 @@ async function initState(): Promise<L.TxHash> {
 
 // the redeemer type of a tuple of Proofs.
 const Redeemer = L.Data.Object({
-    firstProof: Types.Proof,
-    secondProof: Types.Proof
+    output: Types.Output,
+    pubkey: Types.PubKey,
+    proof:  Types.Proof
 });
 type Redeemer = L.Data.Static<typeof Redeemer>;
 
-const testZKProof: Types.ZKProof = {c: "00",s:"00"};
-const testGammma: Types.Gamma = {gamma: "00"};
-const testProof: Types.Proof = {gamma: testGammma, zkproof: testZKProof};
-const testRedeemer: Redeemer = {firstProof: testProof, secondProof: testProof};
+// an example of how to use these primitives
+const [vrfPriv,vrfPub] = vrf_key_generate()
+console.log(vrfPub)
 
-async function unlockState(txHash:string) {
+async function unlockState() {
     const utxoAtScript: L.UTxO[] = await lucid.utxosAt(lockingAddress);
-    const ourUTxO: L.UTxO[] = utxoAtScript.filter((utxo) => utxo.txHash == txHash);
   
-    const time = Date.now()
-    if (ourUTxO && ourUTxO.length > 0) {
+    const time = Date.now();
+    if (utxoAtScript && utxoAtScript.length > 0) {
+      const firstUtxo = utxoAtScript[0];
+      const datumOfFirstUtxo = firstUtxo.datum?firstUtxo.datum:"00";
+      const input: Types.Input = {input: firstUtxo.txHash + L.Data.from(datumOfFirstUtxo)};
+      const [output,proof] = await vrf_proof(input,vrfPriv);
+      const pubKey: Types.PubKey = {pubkey: vrfPub }
+      const testRedeemer = {
+        output: output,
+        pubkey: pubKey,
+        proof: proof
+      };
       const tx = await lucid
       .newTx()
-      .collectFrom(ourUTxO, L.Data.to<Redeemer>(testRedeemer,Redeemer))
-      .validFrom(time-20000)
-      .validTo(time+1000000)
+      .collectFrom([firstUtxo], L.Data.to<Redeemer>(testRedeemer,Redeemer))
+//      .validFrom(time-20000)
+//      .validTo(time+1000000)
       .attachSpendingValidator(lockVRFScript)
       .complete();
     const signedTx = await tx.sign().complete();
@@ -85,4 +81,4 @@ async function unlockState(txHash:string) {
 }
 
 //console.log(await initState());
-//console.log(await unlockState("504f44858c59b60a31618c5a2089723d8da68825ac773493df9460faa0d3971e"))
+//console.log(await unlockState());

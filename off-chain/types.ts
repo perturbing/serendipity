@@ -11,7 +11,7 @@ export const Output = L.Data.Object({
 export type Output = L.Data.Static<typeof Output>;
 
 export const PubKey = L.Data.Object({
-    pubKey: L.Data.Bytes()
+    pubkey: L.Data.Bytes()
 });
 export type PubKey = L.Data.Static<typeof PubKey>;
 

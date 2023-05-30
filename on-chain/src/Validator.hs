@@ -13,7 +13,7 @@ import PlutusLedgerApi.V2.Contexts ( ScriptContext, TxId (..) )
 import PlutusTx.Prelude
     ( Bool(..), (&&), BuiltinByteString, error, ($), (<>), (>=), Integer, (-), traceError, traceIfFalse )
 import PlutusLedgerApi.Common ()
-import PlutusTx ( BuiltinData, compile, CompiledCode )
+import PlutusTx ( BuiltinData, compile, CompiledCode, makeIsDataIndexed )
 import Utilities (writeCodeToFile, wrapValidator, i2osp)
 import Prelude (IO)
 import PlutusLedgerApi.V2
@@ -21,14 +21,20 @@ import PlutusLedgerApi.V2
 import PlutusTx.Builtins (blake2b_256)
 import PlutusLedgerApi.V1 (POSIXTimeRange)
 
+data Redeemer = Redeemer {
+    output :: Output,
+    pubkey :: PubKey,
+    proof  :: Proof
+}
+makeIsDataIndexed ''Redeemer [('Redeemer,0)]
 
 {-# INLINABLE  testValidator #-}
-testValidator :: BuiltinByteString -> (Proof,Proof) -> ScriptContext -> Bool
-testValidator _dtm (proof1,_proof2) ctx = checkSerendipity && checkCorrectOutput
+testValidator :: BuiltinByteString -> Redeemer -> ScriptContext -> Bool
+testValidator dtm Redeemer{output,pubkey,proof} ctx = checkSerendipity && checkCorrectOutput
     where
         -- Checks that the referenced VRF pkh with stake is allowed to unlock the output
         checkSerendipity :: Bool
-        checkSerendipity = verifyVRF (Input ownRefBS) (Output (blake2b_256 (ownRefBS <> pkh))) (PubKey pkh) proof1 && txValidRangeDiff >= 1020000
+        checkSerendipity = verifyVRF (Input (ownRefBS <> dtm)) output pubkey proof
 
         -- Checks that the reference VRF PKH hashes the Input correctly
         checkCorrectOutput :: Bool
