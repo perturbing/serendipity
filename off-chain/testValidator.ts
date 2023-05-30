@@ -1,4 +1,6 @@
 import * as L from "https://deno.land/x/lucid@0.10.5/mod.ts";
+import { sha256 } from "https://denopkg.com/chiefbiiko/sha256@v1.0.0/mod.ts"
+import * as secp from "https://deno.land/x/secp256k1/mod.ts";
 import * as Types from "./types.ts";
 import { secretSeed } from "./seed.ts";
 
@@ -19,6 +21,11 @@ const pkh: string = L.getAddressDetails(addr).paymentCredential.hash;
 function blake2b_256(input:string) {
     const bin = L.fromHex(input)
     return L.toHex(L.C.hash_blake2b256(bin))
+}
+
+// this function expects a Uint8Array as its input.
+function sha_256(input:Uint8Array) {
+    return L.toHex(sha256(input))
 }
 
 // a function that reads an unparametrized plutus script as a file location.
@@ -45,12 +52,12 @@ async function initState(): Promise<L.TxHash> {
     return signedTx.submit();
 }
 
+// the redeemer type of a tuple of Proofs.
 const Redeemer = L.Data.Object({
     firstProof: Types.Proof,
     secondProof: Types.Proof
 });
 type Redeemer = L.Data.Static<typeof Redeemer>;
-
 
 const testZKProof: Types.ZKProof = {c: "00",s:"00"};
 const testGammma: Types.Gamma = {gamma: "00"};
@@ -78,4 +85,16 @@ async function unlockState(txHash:string) {
 }
 
 //console.log(await initState());
-console.log(await unlockState("504f44858c59b60a31618c5a2089723d8da68825ac773493df9460faa0d3971e"))
+//console.log(await unlockState("504f44858c59b60a31618c5a2089723d8da68825ac773493df9460faa0d3971e"))
+
+// some testing for the ECDSA insecure  dummy VRF
+const privKey = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef";
+const pubKey = secp.getPublicKey(privKey); // the  33 bytes pubkey
+
+const input = L.fromText("greetings from noble");
+const gamma = sha_256(L.fromHex(input)); // the msg to be signed
+const proof = await secp.signAsync(gamma, privKey);
+const output = blake2b_256(gamma+proof.toCompactHex())
+
+const isValid = secp.verify(proof, gamma, pubKey);
+console.log(proof)
