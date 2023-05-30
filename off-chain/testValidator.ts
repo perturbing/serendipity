@@ -49,7 +49,6 @@ type Redeemer = L.Data.Static<typeof Redeemer>;
 
 // an example of how to use these primitives
 const [vrfPriv,vrfPub] = vrf_key_generate()
-console.log(vrfPub)
 
 async function unlockState() {
     const utxoAtScript: L.UTxO[] = await lucid.utxosAt(lockingAddress);
@@ -69,8 +68,8 @@ async function unlockState() {
       const tx = await lucid
       .newTx()
       .collectFrom([firstUtxo], L.Data.to<Redeemer>(testRedeemer,Redeemer))
-//      .validFrom(time-20000)
-//      .validTo(time+1000000)
+      .validFrom(time-20000)
+      .validTo(time+1000000)
       .attachSpendingValidator(lockVRFScript)
       .complete();
     const signedTx = await tx.sign().complete();
@@ -79,3 +78,8 @@ async function unlockState() {
     }
     else return "No UTxO's found that can be burned"
 }
+
+//console.log(await initState());
+//const txHash = await unlockState();
+//console.log(txHash);
+//console.log(await lucid.awaitTx(txHash))

@@ -47,4 +47,4 @@ const input:Types.Input = { input: L.fromText("greetings from noble")}
 
 const [output,proof] = await vrf_proof(input,vrfPriv);
 const isValid = vrf_verify(input,output,vrfPub,proof);
-console.log(isValid)
+//console.log(isValid)
