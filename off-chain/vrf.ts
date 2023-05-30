@@ -17,15 +17,13 @@ function sha_256(input:Uint8Array) {
 export function vrf_key_generate() {
     const privKey = secp.utils.randomPrivateKey();
     const pubKey = secp.getPublicKey(privKey);
-    return {
-        PrivateKey: L.toHex(privKey),
-        PublicKey: L.toHex(pubKey)
-    }
+    return [L.toHex(privKey), L.toHex(pubKey)];
 }
 
 // input and privkey in Hex.
 export async function vrf_proof(input:Types.Input,privKey:string): Promise<[Types.Output,Types.Proof]> {
-    const gamma: Types.Gamma = { gamma: sha_256(L.fromHex(input.input)) };
+    const pubKey = secp.getPublicKey(privKey);
+    const gamma: Types.Gamma = { gamma: sha_256(L.fromHex(input.input+L.toHex(pubKey))) };
     const signature = await secp.signAsync(gamma.gamma, privKey);
     const zkproof: Types.ZKProof = { zkproof: signature.toCompactHex() }
     const output: Types.Output = { output: blake2b_256(gamma.gamma + zkproof.zkproof) }
@@ -42,10 +40,10 @@ export function vrf_verify(output:Types.Output,proof:Types.Proof,pubKey:string):
 }
 
 // an example of how to use these primitives
-const privKey = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef";
-const pubKey = L.toHex(secp.getPublicKey(privKey)); // the  33 bytes pubkey (034646ae5047316b4230d0086c8acec687f00b1cd9d1dc634f6cb358ac0a9a8fff)
+const [vrfPriv,vrfPub] = vrf_key_generate()
 
 const input:Types.Input = { input: L.fromText("greetings from noble")}
 
-const [output,proof] = await vrf_proof(input,privKey);
-console.log(vrf_verify(output,proof,pubKey))
+const [output,proof] = await vrf_proof(input,vrfPriv);
+const isValid = vrf_verify(output,proof,vrfPub);
+//console.log(isValid)
