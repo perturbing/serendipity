@@ -79,6 +79,3 @@ async function unlockState() {
     }
     else return "No UTxO's found that can be burned"
 }
-
-//console.log(await initState());
-//console.log(await unlockState());
