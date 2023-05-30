@@ -33,7 +33,7 @@ export async function vrf_proof(input:Types.Input,privKey:string): Promise<[Type
     return [output,proof]
 }
 
-export function vrf_verify(output:Types.Output,proof:Types.Proof,pubKey:string) {
+export function vrf_verify(output:Types.Output,proof:Types.Proof,pubKey:string): boolean {
     const sig = secp.Signature.fromCompact(proof.zkproof.zkproof);
     const msg = proof.gamma.gamma
     const isValid = secp.verify(sig, msg, pubKey);
