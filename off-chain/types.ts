@@ -30,3 +30,7 @@ export const Proof = L.Data.Object({
     zkproof: ZKProof
   })
 export type Proof = L.Data.Static<typeof Proof>
+
+// The type of a CurrencySymbol with the constraint that it must be of the exact size of 28 bytes
+export const CurrencySymbol = L.Data.Bytes({ minLength: 28, maxLength: 28 });
+export type CurrencySymbol = L.Data.Static<typeof CurrencySymbol>;
