@@ -31,12 +31,13 @@ export async function vrf_proof(input:Types.Input,privKey:string): Promise<[Type
     return [output,proof]
 }
 
-export function vrf_verify(output:Types.Output,proof:Types.Proof,pubKey:string): boolean {
+export function vrf_verify(input:Types.Input,output:Types.Output,pubKey:string,proof:Types.Proof): boolean {
     const sig = secp.Signature.fromCompact(proof.zkproof.zkproof);
     const msg = proof.gamma.gamma
+    const checkGamma = sha_256(L.fromHex(input.input+pubKey))
     const isValid = secp.verify(sig, msg, pubKey);
     const checkOutput = blake2b_256(msg+sig.toCompactHex())
-    return isValid && checkOutput == output.output
+    return isValid && checkOutput == output.output && checkGamma == msg
 }
 
 // an example of how to use these primitives
@@ -45,5 +46,5 @@ const [vrfPriv,vrfPub] = vrf_key_generate()
 const input:Types.Input = { input: L.fromText("greetings from noble")}
 
 const [output,proof] = await vrf_proof(input,vrfPriv);
-const isValid = vrf_verify(output,proof,vrfPub);
-//console.log(isValid)
+const isValid = vrf_verify(input,output,vrfPub,proof);
+console.log(isValid)

@@ -54,6 +54,6 @@ makeIsDataIndexed ''Proof [('Proof,0)]
 verifyVRF :: Input -> Output -> PubKey -> Proof -> Bool
 -- verifyVRF (Input inBs) (Output outBs) (PubKey pk) _ = outBs == blake2b_256 (inBs <> pk)
 verifyVRF (Input inBs) (Output outBs) (PubKey pk) (Proof (Gamma gammaBs) (ZKProof proofBs)) =
-     traceIfFalse "VRF-Fail: ECDSA" (verifyEcdsaSecp256k1Signature pk gammaBs proofBs) && -- verify that proofBs is a valid signature of the msg hash gammaBs under pk.
-     traceIfFalse "VRF-Fail: msg not input hash" (gammaBs == sha2_256 (inBs <> pk)) &&                 -- verify that the msg that was signed, is inBs concatenated with the pk.
-     traceIfFalse "VRF-Fail: output not correct" (outBs == blake2b_256 (gammaBs <> proofBs))           -- verify that the outBs is the blake3b hash of the signature and the msg hash
+     traceIfFalse "VRF-Fail: ECDSA" (verifyEcdsaSecp256k1Signature pk gammaBs proofBs) &&      -- verify that proofBs is a valid signature of the msg hash gammaBs under pk.
+     traceIfFalse "VRF-Fail: msg not input hash" (gammaBs == sha2_256 (inBs <> pk)) &&         -- verify that the msg that was signed, is inBs concatenated with the pk.
+     traceIfFalse "VRF-Fail: output not correct" (outBs == blake2b_256 (gammaBs <> proofBs))   -- verify that the outBs is the blake3b hash of the signature and the msg hash
