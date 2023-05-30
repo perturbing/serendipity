@@ -86,15 +86,3 @@ async function unlockState(txHash:string) {
 
 //console.log(await initState());
 //console.log(await unlockState("504f44858c59b60a31618c5a2089723d8da68825ac773493df9460faa0d3971e"))
-
-// some testing for the ECDSA insecure  dummy VRF
-const privKey = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef";
-const pubKey = secp.getPublicKey(privKey); // the  33 bytes pubkey
-
-const input = L.fromText("greetings from noble");
-const gamma = sha_256(L.fromHex(input)); // the msg to be signed
-const proof = await secp.signAsync(gamma, privKey);
-const output = blake2b_256(gamma+proof.toCompactHex())
-
-const isValid = secp.verify(proof, gamma, pubKey);
-console.log(proof)

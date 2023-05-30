@@ -1,13 +1,27 @@
 import * as L from "https://deno.land/x/lucid@0.10.5/mod.ts";
 
+export const Input = L.Data.Object({
+    input : L.Data.Bytes()
+});
+export type Input = L.Data.Static<typeof Input>;
+
+export const Output = L.Data.Object({
+    output: L.Data.Bytes()
+});
+export type Output = L.Data.Static<typeof Output>;
+
+export const PubKey = L.Data.Object({
+    pubKey: L.Data.Bytes()
+});
+export type PubKey = L.Data.Static<typeof PubKey>;
+
 export const Gamma = L.Data.Object({
     gamma: L.Data.Bytes()
 });
 export type Gamma = L.Data.Static<typeof Gamma>;
 
 export const ZKProof = L.Data.Object({
-    c: L.Data.Bytes(),
-    s: L.Data.Bytes()
+    zkproof: L.Data.Bytes()
 });
 export type ZKProof = L.Data.Static<typeof ZKProof>;
 
