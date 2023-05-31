@@ -75,7 +75,7 @@ async function unlockState() {
     if (utxoAtScript && utxoAtScript.length > 0) {
       const firstUtxo = utxoAtScript[0];
       const datumOfFirstUtxo = firstUtxo.datum?firstUtxo.datum:"00";
-      const input: Types.Input = {input: firstUtxo.txHash + L.Data.from(datumOfFirstUtxo)+"0"+lucid.utils.slotToUnixTime(lucid.utils.unixTimeToSlot(time-60*1000)).toString(16)};
+      const input: Types.Input = {input: firstUtxo.txHash + L.Data.from(datumOfFirstUtxo)+"0"+lucid.utils.slotToUnixTime(lucid.utils.unixTimeToSlot(time-60*1000)).toString(16)}; // use padStart instead of "0"+slotHexString
       const [output,proof] = await vrf_proof(input,vrfPriv);
       const pubKey: Types.PubKey = {pubkey: vrfPub }
       const testRedeemer = {
