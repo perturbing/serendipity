@@ -5,9 +5,18 @@
 
 module Plutus.VRF where
 
-import PlutusTx
+import PlutusTx ( makeIsDataIndexed )
 import PlutusTx.Builtins
+    ( BuiltinByteString,
+      sha2_256,
+      verifyEcdsaSecp256k1Signature,
+      blake2b_256 )
 import PlutusTx.Prelude
+    ( Bool,
+      Eq((==)),
+      (&&),
+      traceIfFalse,
+      Semigroup((<>)) )
 
 -- | A type for representing a VRF input
 newtype Input = Input BuiltinByteString
@@ -39,9 +48,8 @@ data Proof = Proof Gamma ZKProof
 makeIsDataIndexed ''Proof [('Proof,0)]
 
 -- | This is currently not a proper VRF! It just emulates the behaviour of one 
--- in a insecure way. This implementation is insecure because the output is a hash
--- of the gamma concatenated with the a ECDSA signature, which is not uniformly distributed.
--- Also, we use ECDSA, which has malleable signatures, so the output is not unique.
+-- in a insecure way. This implementation is insecure because an ECDSA signature
+-- is not unique (since it relies on a ephimiral key). This is property 2 below.
 -- 
 -- In general these three securitry properties must hold for a VRF
 -- 1: Pseudorandomness (the outputs look random for someone who does not have the secret key of pk)
@@ -50,6 +58,7 @@ makeIsDataIndexed ''Proof [('Proof,0)]
 --
 -- Replace this when CIP 381 is implemented in plutus. For a proper VRF consider the following gist
 -- https://gist.github.com/perturbing/ebde137286944b30b1de2277cfaf1c5a
+-- Or replace the ECDSA with a BLS signature (this preserves the uniqueness property).
 {-# INLINEABLE verifyVRF #-}
 verifyVRF :: Input -> Output -> PubKey -> Proof -> Bool
 -- verifyVRF (Input inBs) (Output outBs) (PubKey pk) _ = outBs == blake2b_256 (inBs <> pk)

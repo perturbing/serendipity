@@ -1,4 +1,4 @@
-import * as L from "https://deno.land/x/lucid@0.10.5/mod.ts";
+import * as L from "https://deno.land/x/lucid@0.10.6/mod.ts";
 
 export const Input = L.Data.Object({
     input : L.Data.Bytes()
