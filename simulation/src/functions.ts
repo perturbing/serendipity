@@ -72,6 +72,14 @@ async function readScript(name: string): Promise<L.SpendingValidator> {
         script: validator.cborHex,
     };
 }
+// a helper function that reads an unparametrized plutus policy
+async function readPolicy(name: string): Promise<L.MintingPolicy> {
+    const validator = JSON.parse(await Deno.readTextFile("assets/" + name));
+    return {
+        type: "PlutusV2",
+        script: validator.cborHex,
+    };
+}
 
 // import the locking validator (this locks the reference token of the PPP Certificate NFT)
 export const lockingValidator: L.SpendingValidator = await readScript("stake-validator.plutus");
@@ -79,6 +87,9 @@ export const lockingAddress: L.Address = lucid.utils.validatorToAddress(lockingV
 
 export const alwaysFreeValidator: L.SpendingValidator = await readScript("free-validator.plutus");
 export const alwaysFreeAddress: L.Address = lucid.utils.validatorToAddress(alwaysFreeValidator);
+
+export const alwaysFreeMint: L.MintingPolicy = await readPolicy("free-validator.plutus");
+export const alwaysFreePol: L.PolicyId = lucid.utils.mintingPolicyToId(alwaysFreeMint);
 
 // import NFT minting policy and apply above parameters
 const RandParams = L.Data.Tuple([Types.CurrencySymbol]);
@@ -122,7 +133,7 @@ export async function initStakedValue(): Promise<L.TxHash> {
 const Redeemer = L.Data.Object({output: Types.Output, proof: Types.Proof});
 type Redeemer = L.Data.Static<typeof Redeemer>;
 
-export async function unstake(id:number) {
+export async function unstakeValue(id:number) {
     lucid.selectWalletFromSeed(secretSeeds[id+1]);
     const utxoAtScript: L.UTxO[] = await lucid.utxosAt(lockingAddress);
     const ourDtm = L.toHex(L.C.hash_blake2b256(L.fromHex(L.Data.to(new L.Constr(0,[validators[id].publicKey])) )));
@@ -147,7 +158,7 @@ export async function unstake(id:number) {
     else return "No UTxO's found that can be used"
 }
 
-export async function stake(id:number, stake:bigint): Promise<L.TxHash> {
+export async function stakeValue(id:number, stake:bigint): Promise<L.TxHash> {
     lucid.selectWalletFromSeed(secretSeeds[id+1]);
     const tx = lucid.newTx();
     const dtm: Types.PubKey = {pubkey: validators[id].publicKey}
@@ -198,12 +209,15 @@ export async function createRand(slotnr:number,valUtxo:L.UTxO,reqUtxo:L.UTxO,sta
     const [output,proof] = await VRF.vrf_proof(input, validators[id].privateKey);
     
     const redeemer: Redeemer = {output: output , proof: proof};
+    const vrfProofTkn: L.Unit = L.toUnit(alwaysFreePol,L.fromText("VRF mint counter"));
     const tx = lucid
       .newTx()
       .collectFrom([valUtxo])
       .collectFrom([reqUtxo], L.Data.to<Redeemer>(redeemer,Redeemer))
       .attachSpendingValidator(randValidator)
       .readFrom([stakeUtxo])
+    //   .mintAssets({[vrfProofTkn]:1n}, L.Data.void())
+    //   .attachMintingPolicy(alwaysFreeMint)                 -- Enable this for testing and keeping track of the stochastic nature of the POS protocol.
       .validFrom(time)
       .validTo(time+100*1000)
     const finalTx = await tx.complete({coinSelection: false});
@@ -217,6 +231,11 @@ async function filterUTxOAsync(stake:bigint,utxo: L.UTxO,id:number): Promise<boo
     const time = lucid.utils.slotToUnixTime(slotnr);
     const input: Types.Input = {input: utxo.txHash +  L.toHex(intToUint8Array(time / (1000*100)))};
     const [output,_proof] = await VRF.vrf_proof(input, validators[id].privateKey);
+
+    const currentTimeInMilliseconds = Date.now();
+    const currentTimeInSeconds = Math.floor(currentTimeInMilliseconds / 1000);
+    const formattedTime = new Date(currentTimeInSeconds * 1000).toLocaleString();
+    console.log(formattedTime+" | "+"Running Validator "+id + " | stake: " + stake + "/255 (" + ((Number(stake) / Number(255n)) * 100).toFixed(2) + "%)" + " | " + "VRF value for UTxO ref \"" + utxo.txHash + "\" is " + BigInt("0x" + output.output.substring(0,2)))
     return (BigInt("0x" + output.output.substring(0,2)) < stake); 
 }
 

@@ -12,25 +12,19 @@ import {
     requestRand,
     lockingAddress,
     initStakedValue,
-    unstake,
-    stake,
+    unstakeValue,
+    stakeValue,
     burn
 } from "./src/functions.ts";
 
-const lucid: L.Lucid = await L.Lucid.new(
-    new L.Kupmios(
-      "http://127.0.0.3:1442",
-      "ws://127.0.0.3:1337",
-    ),
-    "Preview",
-);
 
-const utxoAtStakeScript: L.UTxO[] = await lucid.utxosAt(lockingAddress);
 
 const flags = parse(Deno.args, {
-  number: ["validatorID", "stakeAmount"],
+  number: ["validatorID", "stakeAmount","kupo","kupmios"],
   boolean: ["stake", "unstake","deploy","burn","mint","help","createRequest"]
 });
+
+
 
 if (flags.help) {
     const helpText = 'To use to node you can use the flag\n\
@@ -46,6 +40,16 @@ if (flags.help) {
     console.log(helpText)
     Deno.exit(0)
 }
+
+const lucid: L.Lucid = await L.Lucid.new(
+    new L.Kupmios(
+      "http://"+String(flags.kupmios)+":1442",
+      "ws://"+String(flags.kupmios)+":1337",
+    ),
+    "Preview",
+);
+
+const utxoAtStakeScript: L.UTxO[] = await lucid.utxosAt(lockingAddress);
 
 if (flags.deploy) {
     const txHash = await initStakedValue();
@@ -90,7 +94,7 @@ if (flags.stake) {
             const ourDtm = L.toHex(L.C.hash_blake2b256(L.fromHex(L.Data.to(new L.Constr(0,[publicKey])) )));
             const ourStakeUTxO: L.UTxO[] = utxoAtStakeScript.filter((utxo) => utxo.datumHash == ourDtm && utxo.assets[stakedFTtkn] > 0n);
             if (ourStakeUTxO.length == 0) {
-                const txHash = await stake(id,BigInt(flags.stakeAmount));
+                const txHash = await stakeValue(id,BigInt(flags.stakeAmount));
                 console.log(txHash);
                 await lucid.awaitTx(txHash);
                 Deno.exit(0)
@@ -111,10 +115,115 @@ if (flags.stake) {
 }
 
 if (flags.unstake) {
-    const txHash = await unstake(id);
+    const txHash = await unstakeValue(id);
     console.log(txHash);
     await lucid.awaitTx(txHash);
     Deno.exit(0);
+}
+
+interface State {
+    walletUTxOUnused: L.UTxO[];
+    requestUTxOUnused: L.UTxO[];
+    walletUTxOUsed: L.UTxO[];
+    requestUTxOUsed: L.UTxO[];
+}
+
+class SharedState {
+    private state: State;
+  
+    constructor(initialState: State) {
+      this.state = initialState;
+    }
+  
+    getState(): State {
+      return this.state;
+    }
+  
+    setState(newState: State): void {
+      this.state = newState;
+    }
+}
+
+
+lucid.selectWalletFromSeed(secretSeeds[id+1]);
+const sharedState = new SharedState({
+    walletUTxOUnused: await lucid.wallet.getUtxos(),
+    requestUTxOUnused: await lucid.utxosAt(randAddress),
+    walletUTxOUsed: [],
+    requestUTxOUsed: [],
+});
+
+const ourDtm = L.toHex(L.C.hash_blake2b256(L.fromHex(L.Data.to(new L.Constr(0,[validators[id].publicKey])) )));
+const ourStakeUTxO: L.UTxO[] = utxoAtStakeScript.filter((utxo) => utxo.datumHash == ourDtm && utxo.assets[stakedFTtkn] > 0n);
+const stake: bigint = ourStakeUTxO[0].assets[stakedFTtkn];
+
+function arrayDifference<T>(a: T[], b: T[]): T[] {
+    return a.filter(x => !b.includes(x));
+}
+
+async function job1() {
+    const state = sharedState.getState();
+
+    // the utxo's at the wallet if validator
+    const utxoAtWalletUnUsed: L.UTxO[] = state.walletUTxOUnused;
+    const utxoAtWalletUsed: L.UTxO[] = state.walletUTxOUsed;
+    const walletUTxOAvailable: L.UTxO[] = arrayDifference(utxoAtWalletUnUsed,utxoAtWalletUsed)
+
+    // the utxo's that request randomness
+    const utxoAtRandScriptUnused: L.UTxO[] = state.requestUTxOUnused;
+    const utxoAtRandScriptUsed: L.UTxO[] = state.requestUTxOUsed;
+    const utxoAtRandScriptAvailable: L.UTxO[] = arrayDifference(utxoAtRandScriptUnused,utxoAtRandScriptUsed);
+
+    // the utxo's that request randomness for which we have a VRF low enough
+    const filteredUTxOs: L.UTxO[] = await filterUTxOs(stake,utxoAtRandScriptAvailable,id);
+
+    const slotnr = lucid.currentSlot()-50;
+        
+    if (walletUTxOAvailable && filteredUTxOs) {
+        const walletUTxo: L.UTxO | undefined = walletUTxOAvailable.shift()
+        const requestUtxo: L.UTxO | undefined = filteredUTxOs.shift()
+            if (walletUTxo !== undefined && requestUtxo !== undefined) {
+                const currentTimeInMilliseconds = Date.now();
+                const currentTimeInSeconds = Math.floor(currentTimeInMilliseconds / 1000);
+                const formattedTime = new Date(currentTimeInSeconds * 1000).toLocaleString();
+                try {
+                    const txHash = await createRand(slotnr,walletUTxo,requestUtxo,ourStakeUTxO[0],id)
+                    console.log(formattedTime+" | "+"Running Validator "+id + " | stake: " + stake + "/255 (" + ((Number(stake) / Number(255n)) * 100).toFixed(2) + "%)" + " | " + "Minted randomness! TxHash: " + txHash)
+                    utxoAtWalletUsed.push(walletUTxo)
+                } catch (error) {
+                    utxoAtWalletUsed.push(walletUTxo)
+                }
+                sharedState.setState({
+                    walletUTxOUnused: walletUTxOAvailable,
+                    requestUTxOUnused: utxoAtRandScriptAvailable.filter(utxo => utxo !== requestUtxo),
+                    walletUTxOUsed: [...utxoAtWalletUsed, walletUTxo],
+                    requestUTxOUsed: [...utxoAtRandScriptUsed,requestUtxo],
+                });
+            }
+    }
+}
+
+async function job2() {
+    // const sharedState = new SharedState({
+    //     walletUTxOUnused: await lucid.wallet.getUtxos(),
+    //     requestUTxOUnused: await lucid.utxosAt(randAddress),
+    //     walletUTxOUsed: [],
+    //     requestUTxOUsed: [],
+    // });
+    const state = sharedState.getState();
+
+    const currentWalletUTxOUnused = await lucid.wallet.getUtxos();
+    const currentRequestUTxOUnused = await lucid.utxosAt(randAddress);
+
+    const newWalletUnused = arrayDifference(currentWalletUTxOUnused,state.walletUTxOUsed)
+    const newRequestUnused = arrayDifference(currentRequestUTxOUnused,state.requestUTxOUsed)
+
+    sharedState.setState({
+        walletUTxOUnused: newWalletUnused,
+        requestUTxOUnused: newRequestUnused,
+        walletUTxOUsed: state.walletUTxOUsed,
+        requestUTxOUsed: state.requestUTxOUsed,
+    });
 }
 
 if (flags.mint) {
@@ -123,27 +232,14 @@ if (flags.mint) {
         const currentTimeInSeconds = Math.floor(currentTimeInMilliseconds / 1000);
         const formattedTime = new Date(currentTimeInSeconds * 1000).toLocaleString();
 
-        lucid.selectWalletFromSeed(secretSeeds[id+1]);
-        const ourDtm = L.toHex(L.C.hash_blake2b256(L.fromHex(L.Data.to(new L.Constr(0,[validators[id].publicKey])) )));
-        const ourStakeUTxO: L.UTxO[] = utxoAtStakeScript.filter((utxo) => utxo.datumHash == ourDtm && utxo.assets[stakedFTtkn] > 0n);
-        // The stake of validator
-        const stake: bigint = ourStakeUTxO[0].assets[stakedFTtkn];
-        // the utxo's at the wallet if validator
-        const utxoAtWallet: L.UTxO[] = await lucid.wallet.getUtxos();
+        const state = sharedState.getState();
 
-        // the utxo's that request randomness
-        const utxoAtRandScript: L.UTxO[] = await lucid.utxosAt(randAddress);
-        const filteredUTxOs: L.UTxO[] = await filterUTxOs(stake,utxoAtRandScript,id);
+        // check if vrf value is low enough an grab request
+        job1();
+        job2();
 
-        const slotnr = lucid.currentSlot()-50;
         
-        if (filteredUTxOs && filteredUTxOs.length > 0) {
-            for (let i = 0; i < filterUTxOs.length; i++) {
-                const txHash = await createRand(slotnr,utxoAtWallet[i],filteredUTxOs[i],ourStakeUTxO[0],id)
-                console.log(formattedTime+" | "+"Running Validator "+id + " | stake: " + stake + "/255 (" + ((Number(stake) / Number(255n)) * 100).toFixed(2) + "%)" + " | " + "Minted randomness! TxHash: " + txHash)
-                lucid.awaitTx(txHash)
-        }}
-        console.log(formattedTime+" | "+"Running Validator "+id + " | stake: " + stake + "/255 (" + ((Number(stake) / Number(255n)) * 100).toFixed(2) + "%)" + " | " + utxoAtRandScript.length + " requests currently");
+        console.log(formattedTime+" | "+"Running Validator "+id + " | stake: " + stake + "/255 (" + ((Number(stake) / Number(255n)) * 100).toFixed(2) + "%)" + " | available wallet UTxO's: " + state.walletUTxOUnused.length);
         await new Promise((resolve) => setTimeout(resolve, 1000));
     }
 }
