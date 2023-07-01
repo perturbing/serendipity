@@ -47,11 +47,11 @@ splitValue symbol val
     where val' = getValue val
 
 -- The 'Datum' is the Address location where the newly create randommness should end up.
-data MyDatum = MyDatum {
+data ReqDatum = ReqDatum {
     requester   :: PubKeyHash,
     address     :: Address
 }
-makeIsDataIndexed ''MyDatum [('MyDatum,0)]
+makeIsDataIndexed ''ReqDatum [('ReqDatum,0)]
 
 -- The 'Redeemer' is an ouput together with a proof that together is a valid VRF proof for the input
 -- of the input reference concatinated with the transaction validity range.
@@ -68,7 +68,7 @@ makeIsDataIndexed ''MyRedeemer [('Cancel,0),('Mint,1)]
 -- | This script is parametrised by the currency symbol of
 -- | the stake tokens. This symbol thus should only have one asset class.
 {-# INLINABLE  randValidator #-}
-randValidator :: CurrencySymbol -> MyDatum -> MyRedeemer -> ScriptContext -> Bool
+randValidator :: CurrencySymbol -> ReqDatum -> MyRedeemer -> ScriptContext -> Bool
 randValidator stakeSymbol dtm red ctx = case red of
     Cancel                            -> txSignedBy txInfo (requester dtm)
     Mint MintRandomness{output,proof} -> foldr (&&) (checkSerendipity output proof) [checkOutputThreshold output, checkRequestOutput requestOutput output, checkValueConserved, checkTxValidRange]
@@ -91,7 +91,7 @@ randValidator stakeSymbol dtm red ctx = case red of
             where
                 h = DatumHash (blake2b_256 bs)
 
-        -- Chekc here that the value of the create request output is 10 ada less than the input value.
+        -- Check here that the value of the create request output is 10 ada less than the input value.
         checkValueConserved :: Bool
         checkValueConserved = requestValueIn == txOutValue requestOutput <> singleton adaSymbol adaToken 10000000
 

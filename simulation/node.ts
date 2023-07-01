@@ -14,14 +14,15 @@ import {
     initStakedValue,
     unstakeValue,
     stakeValue,
-    burn
+    burn,
+    requestRandCancel
 } from "./src/functions.ts";
 
 
 
 const flags = parse(Deno.args, {
   number: ["validatorID", "stakeAmount","kupo","kupmios"],
-  boolean: ["stake", "unstake","deploy","burn","mint","help","createRequest"]
+  boolean: ["stake", "unstake","deploy","burn","mint","help","createRequest","cancelRequest"]
 });
 
 
@@ -67,6 +68,13 @@ if (flags.burn) {
 
 if (flags.createRequest) {
     const txHash = await requestRand();
+    console.log(txHash);
+    await lucid.awaitTx(txHash);
+    Deno.exit(0)
+}
+
+if (flags.cancelRequest) {
+    const txHash = await requestRandCancel();
     console.log(txHash);
     await lucid.awaitTx(txHash);
     Deno.exit(0)

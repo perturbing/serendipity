@@ -186,19 +186,52 @@ export async function burn(): Promise<L.TxHash> {
     return signedTx.submit();
 }
 
+const ReqDatum = L.Data.Object({requester: Types.PubKeyHash, address: Types.Address});
+type ReqDatum = L.Data.Static<typeof ReqDatum>;
+
 // currently this implements no target address for the randomness
 export async function requestRand(): Promise<L.TxHash> {
+    const addr: L.Address = await lucid.wallet.address();
+    const pkh: string = L.getAddressDetails(addr).paymentCredential.hash;
+    const alwaysFreeAddressScriptHash = L.getAddressDetails(alwaysFreeAddress).paymentCredential.hash;
+    const addrAlwaysTrue: Types.Address = {addressCredential: { ScriptCredential: [alwaysFreeAddressScriptHash] }, addressStakingCredential: null};
+    const reqDatum: ReqDatum = {requester: pkh, address: addrAlwaysTrue};
     const tx = lucid
       .newTx()
       .payToContract(
         randAddress,
-        L.Data.to("ffff"),
-        {lovelace: 3000000n}
+        L.Data.to<ReqDatum>(reqDatum,ReqDatum),
+        {lovelace: 15000000n}
       )
     const finalTx = await tx.complete();
     const signedTx = await finalTx.sign().complete();
    
     return signedTx.submit();
+}
+
+export async function requestRandCancel(): Promise<L.TxHash> {
+    const addr: L.Address = await lucid.wallet.address();
+    const pkh: string = L.getAddressDetails(addr).paymentCredential.hash;
+    const alwaysFreeAddressScriptHash = L.getAddressDetails(alwaysFreeAddress).paymentCredential.hash;
+    const addrAlwaysTrue: Types.Address = {addressCredential: { ScriptCredential: [alwaysFreeAddressScriptHash] }, addressStakingCredential: null};
+    const reqDatum: ReqDatum = {requester: pkh, address: addrAlwaysTrue}
+    const ourDtm = L.toHex(L.C.hash_blake2b256(L.fromHex(L.Data.to<ReqDatum>(reqDatum,ReqDatum) )));
+    const utxoAtReqScript: L.UTxO[] = await lucid.utxosAt(randAddress);
+    const ourRequests: L.UTxO[] = utxoAtReqScript.filter((utxo) => utxo.datumHash == ourDtm);
+
+    if (ourRequests && ourRequests.length > 0) {
+        const tx = await lucid
+        .newTx()
+        .collectFrom(ourRequests, L.Data.to(new L.Constr(0,[])))
+        .attachSpendingValidator(randValidator)
+        .addSignerKey(pkh)
+        .complete();
+      const signedTx = await tx.sign().complete();
+     
+      return signedTx.submit();
+      }
+      else return "No UTxO's found that can be burned"
+
 }
 
 // spend requested randomness UTxO with a given UTxO in a wallet of validator given by id.
