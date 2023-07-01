@@ -52,7 +52,7 @@ makeIsDataIndexed ''Proof [('Proof,0)]
 -- In general these three securitry properties must hold for a VRF
 -- 1: Pseudorandomness (the outputs look random for someone who does not have the secret key of pk)
 -- 2: Uniqueness (for any pk and input, there is a unique output)
--- 3: Collision resistance (This must also hold for an adversiary that knows the private key of pk)
+-- 3: Collision resistance (This must also hold for an adversary that knows the private key of pk)
 --
 -- Replace this when CIP 381 is implemented in plutus. For a proper VRF consider the following gist
 -- https://gist.github.com/perturbing/ebde137286944b30b1de2277cfaf1c5a

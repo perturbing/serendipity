@@ -12,7 +12,7 @@ import Plutus.VRF                   ( verifyVRF, Proof, Input (Input), Output (O
 import PlutusLedgerApi.V2.Contexts  ( ScriptContext, TxId (..), findDatum, txSignedBy )
 import PlutusTx.Prelude             ( Bool(..), (&&), BuiltinByteString, error, ($), (<>), Integer
                                     , traceError, fst , (<), indexByteString, foldr, (==), (-)
-                                    , head, maybe, otherwise, (.), Maybe (..), isJust, divide )
+                                    , head, maybe, otherwise, (.), Maybe (..), isJust, divide, find )
 import PlutusTx                     ( BuiltinData, compile, CompiledCode, makeIsDataIndexed )
 import Utilities                    ( writeCodeToFile, wrapValidator, i2osp )
 import Prelude                      ( IO )
@@ -20,9 +20,10 @@ import PlutusLedgerApi.V2           ( ScriptContext(..), TxOutRef, ScriptPurpose
                                     , TxInfo (..), Interval (..), LowerBound (..), UpperBound (..)
                                     , Extended (..), POSIXTime (..), CurrencySymbol (..)
                                     , unsafeFromBuiltinData, TxInInfo (..), Address, TxOut (..)
-                                    , Value (..), TokenName, OutputDatum (..), DatumHash (..), Datum (..), FromData (..), PubKeyHash )
+                                    , Value (..), TokenName, OutputDatum (..), DatumHash (..), Datum (..), FromData (..), PubKeyHash, adaSymbol, adaToken, singleton )
 import PlutusLedgerApi.V1           ( POSIXTimeRange )
 import PlutusTx.AssocMap            ( Map, empty, member, lookup, delete, elems )
+import PlutusTx.Builtins            ( blake2b_256 )
 
 -- [General notes on this file]
 -- This file contains the plutus scripts that governs when and how oracle requests is handled.
@@ -48,8 +49,7 @@ splitValue symbol val
 -- The 'Datum' is the Address location where the newly create randommness should end up.
 data MyDatum = MyDatum {
     requester   :: PubKeyHash,
-    address     :: Address,
-    datum       :: BuiltinData
+    address     :: Address
 }
 makeIsDataIndexed ''MyDatum [('MyDatum,0)]
 
@@ -61,7 +61,7 @@ data MintRandomness = MintRandomness {
 }
 makeIsDataIndexed ''MintRandomness [('MintRandomness,0)]
 
-data MyRedeemer = Cancel | Mint MintRandomness 
+data MyRedeemer = Cancel | Mint MintRandomness
 makeIsDataIndexed ''MyRedeemer [('Cancel,0),('Mint,1)]
 
 -- | The core spending script of the randomness oracle.
@@ -71,7 +71,7 @@ makeIsDataIndexed ''MyRedeemer [('Cancel,0),('Mint,1)]
 randValidator :: CurrencySymbol -> MyDatum -> MyRedeemer -> ScriptContext -> Bool
 randValidator stakeSymbol dtm red ctx = case red of
     Cancel                            -> txSignedBy txInfo (requester dtm)
-    Mint MintRandomness{output,proof} -> foldr (&&) (checkSerendipity output proof) [checkOutputThreshold output, checkOutputLocation, checkValueConserved, checkTxValidRange]
+    Mint MintRandomness{output,proof} -> foldr (&&) (checkSerendipity output proof) [checkOutputThreshold output, checkRequestOutput requestOutput output, checkValueConserved, checkTxValidRange]
     where
         -- This checks that the VRF proof + output in the redeemer, together with the pubkey from the referenced
         -- input and the input composed from concatinating the reference id and the lower bound of the transaction
@@ -85,12 +85,15 @@ randValidator stakeSymbol dtm red ctx = case red of
         checkOutputThreshold :: Output -> Bool
         checkOutputThreshold (Output bs) = indexByteString bs 0 < stakeValue
 
-        -- check here the address, but also that the datum is the hash of the output <> ownRefBS (the ouput is below a threshold)
-        checkOutputLocation :: Bool
-        checkOutputLocation = True
+        -- Check here that the datum of the created request output is the hash of the output (the ouput is below a threshold so not entropic enough)
+        checkRequestOutput :: TxOut -> Output -> Bool
+        checkRequestOutput TxOut{txOutDatum} (Output bs) = txOutDatum == OutputDatumHash h && isJust (findDatum h txInfo)
+            where
+                h = DatumHash (blake2b_256 bs)
 
+        -- Chekc here that the value of the create request output is 10 ada less than the input value.
         checkValueConserved :: Bool
-        checkValueConserved = True
+        checkValueConserved = requestValueIn == txOutValue requestOutput <> singleton adaSymbol adaToken 10000000
 
         -- Check that the transaction validity interval is of size 100 seconds.
         checkTxValidRange :: Bool
@@ -132,6 +135,7 @@ randValidator stakeSymbol dtm red ctx = case red of
         stakeValue :: Integer
         stakeValue = head . elems . fst $ splitValue stakeSymbol (txOutValue stakeRefUtxo)
 
+        -- 'stakeRefDatumHash' is the datum of the utxo that holds the stake that is being referenced.
         stakeRefDatumHash :: Datum
         stakeRefDatumHash = case txOutDatum stakeRefUtxo of
           NoOutputDatum                 -> error ()
@@ -141,10 +145,25 @@ randValidator stakeSymbol dtm red ctx = case red of
                                             where maybeDatum = findDatum (DatumHash h) txInfo
           OutputDatum _                 -> error ()
 
+        -- 'pubkey' is the VRF public key extracted from the datum that is utxo that holds the stake that is being referenced.
         pubkey :: PubKey
         pubkey = case fromBuiltinData (getDatum stakeRefDatumHash) of
             Just pk -> pk
             Nothing -> error ()
+
+        -- 'requestOutput` is the output that is creating in this transaction that propagates the request.
+        requestOutput :: TxOut
+        requestOutput = maybe (error ()) (\x -> x) (find reqOutFilter (txInfoOutputs txInfo))
+            where
+               reqOutFilter :: TxOut -> Bool
+               reqOutFilter TxOut{txOutAddress} = txOutAddress == address dtm
+
+        -- 'requestValueIn` is the total value at the request input that is currently being spend
+        requestValueIn :: Value
+        requestValueIn = maybe (error ()) (txOutValue . txInInfoResolved) (find reqInFilter (txInfoInputs txInfo))
+            where
+                reqInFilter :: TxInInfo -> Bool
+                reqInFilter TxInInfo{txInInfoOutRef} = txInInfoOutRef == ownOutRef
 
 {-# INLINABLE  mkWrappedRandValidator #-}
 mkWrappedRandValidator :: BuiltinData -> BuiltinData -> BuiltinData -> BuiltinData -> ()
