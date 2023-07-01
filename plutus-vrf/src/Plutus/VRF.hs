@@ -1,22 +1,20 @@
-{-# LANGUAGE TemplateHaskell #-}
+{-# LANGUAGE TemplateHaskell   #-}
 {-# LANGUAGE DataKinds         #-}
 {-# LANGUAGE NoImplicitPrelude #-}
 {-# LANGUAGE OverloadedStrings #-}
 
 module Plutus.VRF where
 
-import PlutusTx ( makeIsDataIndexed )
-import PlutusTx.Builtins
-    ( BuiltinByteString,
-      sha2_256,
-      verifyEcdsaSecp256k1Signature,
-      blake2b_256 )
-import PlutusTx.Prelude
-    ( Bool,
-      Eq((==)),
-      (&&),
-      traceIfFalse,
-      Semigroup((<>)) )
+import PlutusTx           ( makeIsDataIndexed )
+import PlutusTx.Builtins  ( BuiltinByteString, sha2_256, verifyEcdsaSecp256k1Signature,
+                            blake2b_256 )
+import PlutusTx.Prelude   ( Bool, (==), (&&), traceIfFalse, (<>) )
+
+-- [General notes on this file]
+-- This file contains the logic of the onchain Verifiable random function.
+-- For reference see https://datatracker.ietf.org/doc/html/draft-irtf-cfrg-vrf-15#name-elliptic-curve-vrf-ecvrf
+-- Currently this VRF is not a real one due to the fact that the BLS primitives are not yet available for use.
+-- An insecure replacement is made using a digital signature.
 
 -- | A type for representing a VRF input
 newtype Input = Input BuiltinByteString
@@ -49,7 +47,7 @@ makeIsDataIndexed ''Proof [('Proof,0)]
 
 -- | This is currently not a proper VRF! It just emulates the behaviour of one 
 -- in a insecure way. This implementation is insecure because an ECDSA signature
--- is not unique (since it relies on a ephimiral key). This is property 2 below.
+-- is not unique (since it relies on a ephimiral key). This breaks property 2 below.
 -- 
 -- In general these three securitry properties must hold for a VRF
 -- 1: Pseudorandomness (the outputs look random for someone who does not have the secret key of pk)

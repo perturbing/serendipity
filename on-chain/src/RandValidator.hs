@@ -9,7 +9,7 @@
 module RandValidator where
 
 import Plutus.VRF                   ( verifyVRF, Proof, Input (Input), Output (Output), PubKey )
-import PlutusLedgerApi.V2.Contexts  ( ScriptContext, TxId (..), findDatum )
+import PlutusLedgerApi.V2.Contexts  ( ScriptContext, TxId (..), findDatum, txSignedBy )
 import PlutusTx.Prelude             ( Bool(..), (&&), BuiltinByteString, error, ($), (<>), Integer
                                     , traceError, fst , (<), indexByteString, foldr, (==), (-)
                                     , head, maybe, otherwise, (.), Maybe (..), isJust, divide )
@@ -20,9 +20,21 @@ import PlutusLedgerApi.V2           ( ScriptContext(..), TxOutRef, ScriptPurpose
                                     , TxInfo (..), Interval (..), LowerBound (..), UpperBound (..)
                                     , Extended (..), POSIXTime (..), CurrencySymbol (..)
                                     , unsafeFromBuiltinData, TxInInfo (..), Address, TxOut (..)
-                                    , Value (..), TokenName, OutputDatum (..), DatumHash (..), Datum (..), FromData (..) )
+                                    , Value (..), TokenName, OutputDatum (..), DatumHash (..), Datum (..), FromData (..), PubKeyHash )
 import PlutusLedgerApi.V1           ( POSIXTimeRange )
 import PlutusTx.AssocMap            ( Map, empty, member, lookup, delete, elems )
+
+-- [General notes on this file]
+-- This file contains the plutus scripts that governs when and how oracle requests is handled.
+-- In the design of this application, a requester sends some funds to the below script address.
+-- This UTxO on its own is a request for randomness, and the requester has the option to cancel it.
+-- Another option is that validators that have stake locked in the stake validator, can spend this utxo. 
+-- The conditions for this spending are that their VRF value, given by some combination of the UTxO ref 
+-- that is being spend and some slot number, is lower than their stake (which the reference in the transaction).
+-- Besides that, this script also checks that an output is created at a specified address by the requester.
+-- The datum of this contains two things
+
+--------------------- helper functions and types -------------
 
 {-# INLINABLE splitValue #-}
 -- | `splitValue` is a utility function that takes a currency symbol and a value, 
@@ -33,37 +45,43 @@ splitValue symbol val
     | otherwise           = (empty,val)
     where val' = getValue val
 
-data DatumType = None | Hash | Inline 
-makeIsDataIndexed ''DatumType [('None,0),('Hash,1),('Inline,2)]
-
 -- The 'Datum' is the Address location where the newly create randommness should end up.
 data MyDatum = MyDatum {
+    requester   :: PubKeyHash,
     address     :: Address,
-    datumType   :: DatumType
+    datum       :: BuiltinData
 }
 makeIsDataIndexed ''MyDatum [('MyDatum,0)]
 
 -- The 'Redeemer' is an ouput together with a proof that together is a valid VRF proof for the input
 -- of the input reference concatinated with the transaction validity range.
-data MyRedeemer = Redeemer {
+data MintRandomness = MintRandomness {
     output :: Output,
     proof  :: Proof
 }
-makeIsDataIndexed ''MyRedeemer [('Redeemer,0)]
+makeIsDataIndexed ''MintRandomness [('MintRandomness,0)]
 
+data MyRedeemer = Cancel | Mint MintRandomness 
+makeIsDataIndexed ''MyRedeemer [('Cancel,0),('Mint,1)]
+
+-- | The core spending script of the randomness oracle.
+-- | This script is parametrised by the currency symbol of
+-- | the stake tokens. This symbol thus should only have one asset class.
 {-# INLINABLE  randValidator #-}
-randValidator :: CurrencySymbol -> BuiltinByteString -> MyRedeemer -> ScriptContext -> Bool
-randValidator stakeSymbol _addr Redeemer{output,proof} ctx = foldr (&&) checkSerendipity [checkOutputThreshold output, checkOutputLocation, checkValueConserved, checkTxValidRange]
+randValidator :: CurrencySymbol -> MyDatum -> MyRedeemer -> ScriptContext -> Bool
+randValidator stakeSymbol dtm red ctx = case red of
+    Cancel                            -> txSignedBy txInfo (requester dtm)
+    Mint MintRandomness{output,proof} -> foldr (&&) (checkSerendipity output proof) [checkOutputThreshold output, checkOutputLocation, checkValueConserved, checkTxValidRange]
     where
         -- This checks that the VRF proof + output in the redeemer, together with the pubkey from the referenced
         -- input and the input composed from concatinating the reference id and the lower bound of the transaction
         -- validity interval is valid.
-        checkSerendipity :: Bool
-        checkSerendipity = verifyVRF (Input (ownRefBS <> i2osp (divide (fst txValidRangeInt) 100))) output pubkey proof
+        checkSerendipity :: Output -> Proof ->  Bool
+        checkSerendipity out prf = verifyVRF (Input (ownRefBS <> i2osp (divide (fst txValidRangeInt) 100))) out pubkey prf
 
         -- Check that the output of the VRF is lower than the treshold given by the stake of pubkey
-        -- Note that a byte (intepreted as an integer) is strictly positive. So if stakeValue = 0
-        -- The case that a validator has nothing at stake, this is always false.
+        -- Note that a byte (intepreted as an integer) is strictly positive. So if stakeValue = 0,
+        -- the case that a validator has nothing at stake, this is always false.
         checkOutputThreshold :: Output -> Bool
         checkOutputThreshold (Output bs) = indexByteString bs 0 < stakeValue
 
