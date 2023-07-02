@@ -88,6 +88,7 @@ randValidator stakeSymbol dtm red ctx = case red of
         checkOutputThreshold (Output bs) = indexByteString bs 0 < stakeValue
 
         -- 'checkRequestOutput' verifies that the datum of the created request output is the blake2b_256 hash of the output.
+        -- The hash of the output is used since its first byte is below a threshold, and thus less entropic.
         checkRequestOutput :: TxOut -> Output -> Bool
         checkRequestOutput TxOut{txOutDatum} (Output bs) = case txOutDatum of
           NoOutputDatum -> False

@@ -13,15 +13,17 @@ import Prelude                  ( IO )
 import PlutusLedgerApi.V2       ( ScriptContext(..), TxOutRef(..), TokenName(..), TxInfo(..)
                                 , TxOutRef, TxId(..), txInInfoOutRef,  unsafeFromBuiltinData )
 
+-- 'freePolicy' is a minting policy that always returns true. The policy's logic is obfuscated
+-- to serve as a "private" testing policy for statistical analysis on-chain.
 {-# INLINABLE freePolicy #-}
 freePolicy :: () -> ScriptContext -> Bool
 freePolicy _red _ctx = a == b
   where 
     a :: Integer
-    a = 1
+    a = 2
 
     b :: Integer
-    b = 1
+    b = 2
 
 {-# INLINABLE mkWrappedFree #-}
 mkWrappedFree :: BuiltinData -> BuiltinData -> ()
@@ -33,15 +35,17 @@ freePolicyCode = $$(compile [|| mkWrappedFree ||])
 saveFreePolicy :: IO ()
 saveFreePolicy = writeCodeToFile "../assets/free-policy.plutus" freePolicyCode
 
+-- 'freeVal' is a spending validator that always returns true. The validator's logic is obfuscated
+-- to serve as a "private" testing validator for statistical analysis on-chain.
 {-# INLINABLE freeVal #-} -- a little easter egg: https://www.youtube.com/watch?v=1lWJXDG2i0A 
 freeVal :: () -> () -> ScriptContext -> Bool
 freeVal _dtm _red _ctx = a == b
   where 
     a :: Integer
-    a = 1
+    a = 2
 
     b :: Integer
-    b = 1
+    b = 2
 
 {-# INLINABLE mkWrappedFreeVal #-}
 mkWrappedFreeVal :: BuiltinData -> BuiltinData -> BuiltinData -> ()
@@ -53,9 +57,15 @@ freeValCode = $$(compile [|| mkWrappedFreeVal ||])
 saveFreeValidator :: IO ()
 saveFreeValidator = writeCodeToFile "../assets/free-validator.plutus" freeValCode
 
+-- The 'Redeemer' data type represents two possible actions - 'Mint' or 'Burn'
 data Redeemer = Mint | Burn
 makeIsDataIndexed ''Redeemer [('Mint,0),('Burn,1)]
 
+-- 'mkStakePolicy' is a one-shot fungible token minting policy. It is used to mint a specific number of tokens once.
+-- Additionally, the policy enforces the minting of precisely 255 tokens.
+-- It has two variants of a 'Redeemer': 'Mint' and 'Burn'. 
+-- If 'Mint' is used, it checks if the correct UTxO was consumed and whether the correct amount was minted.
+-- If 'Burn' is used, it verifies that the right amount has been burned.
 {-# INLINABLE mkStakePolicy #-}
 mkStakePolicy :: TxOutRef -> TokenName -> Redeemer -> ScriptContext -> Bool
 mkStakePolicy oref tn red ctx = case red of
