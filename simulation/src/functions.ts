@@ -286,7 +286,7 @@ export async function createRand(slotnr:number,valUtxo:L.UTxO,reqUtxo:L.UTxO,sta
 
     const red: Redeemer = {output: output , proof: proof};
     const redeemer: ReqRedeemer = {Mint: [red]}
-    const vrfProofTkn: L.Unit = L.toUnit(alwaysFreePol,L.fromText("VRF mint counter"));
+    const vrfProofTkn: L.Unit = L.toUnit(alwaysFreePol,L.fromText("Oracle counter"));
     const tx = lucid
       .newTx()
       .collectFrom([valUtxo])
@@ -298,8 +298,8 @@ export async function createRand(slotnr:number,valUtxo:L.UTxO,reqUtxo:L.UTxO,sta
         L.Data.to( L.toHex(L.C.hash_blake2b256(L.fromHex(output.output))) ),
         newValue
       )
-    //   .mintAssets({[vrfProofTkn]:1n}, L.Data.void())
-    //   .attachMintingPolicy(alwaysFreeMint)                 -- Enable this for testing and keeping track of the stochastic nature of the POS protocol.
+      .mintAssets({[vrfProofTkn]:1n}, L.Data.void())       // 
+      .attachMintingPolicy(alwaysFreeMint)                 // Enable this for testing and keeping track of the stochastic nature of the POS protocol.
       .validFrom(time)
       .validTo(time+100*1000)
     const finalTx = await tx.complete({coinSelection: false});
@@ -329,26 +329,3 @@ export async function filterUTxOs(stake:bigint,utxos:L.UTxO[],id:number): Promis
   
     return filteredObjects.filter((utxo) => utxo !== null) as L.UTxO[];
 }
-
-
-// const test: ReqRedeemer = "Cancel";
-// // console.log(L.Data.to<ReqRedeemer>(test,ReqRedeemer))
-// // console.log(L.Data.to(new L.Constr(0,[])))
-
-// const input: Types.Input = {input: "11" };
-// const [output,proof] = await VRF.vrf_proof(input, validators[0].privateKey);
-// const red: Redeemer = {output: output , proof: proof}
-// const test2: ReqRedeemer = {Mint: [red]}
-// // console.log(test2)
-// // console.log(L.Data.to<ReqRedeemer>(test2,ReqRedeemer))
-
-
-
-
-
-// const utxoAtReqScript: L.UTxO[] = await lucid.utxosAt(randAddress);
-// const dtm = await lucid.provider.getDatum(utxoAtReqScript[0].datumHash)
-// const datum: ReqDatum = L.Data.from<ReqDatum>(dtm,ReqDatum)
-// // console.log(toAddress(datum.address))
-// const newValue = {...utxoAtReqScript[0].assets, lovelace: utxoAtReqScript[0].assets.lovelace - 10000000n}
-// console.log(newValue)
