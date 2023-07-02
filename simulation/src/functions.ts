@@ -298,8 +298,8 @@ export async function createRand(slotnr:number,valUtxo:L.UTxO,reqUtxo:L.UTxO,sta
         L.Data.to( L.toHex(L.C.hash_blake2b256(L.fromHex(output.output))) ),
         newValue
       )
-      // .mintAssets({[vrfProofTkn]:1n}, L.Data.void())       // 
-      // .attachMintingPolicy(alwaysFreeMint)                 // Enable this for testing and keeping track of the stochastic nature of the POS protocol.
+      .mintAssets({[vrfProofTkn]:1n}, L.Data.void())       // 
+      .attachMintingPolicy(alwaysFreeMint)                 // Enable this for testing and keeping track of the stochastic nature of the POS protocol.
       .validFrom(time)
       .validTo(time+100*1000)
     const finalTx = await tx.complete({coinSelection: false});
