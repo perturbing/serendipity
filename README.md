@@ -11,4 +11,4 @@ nix develop github:input-output-hk/devX/e0037345b5874979cb6a304915714348febdae65
 or if do a `direnv allow`.
 
 # Run
-Install deno and watch this [explanation](youtube.com/@perturbing101).
+Install deno and watch this [explanation](https://www.youtube.com/@perturbing101).
