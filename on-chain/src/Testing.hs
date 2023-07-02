@@ -6,7 +6,7 @@
 module Testing where
 
 import PlutusTx.Prelude         ( Integer, Bool (..), ($), (==), (&&), any, traceIfFalse, negate )
-import PlutusLedgerApi.V1.Value (flattenValue)
+import PlutusLedgerApi.V1.Value ( flattenValue )
 import PlutusTx                 ( BuiltinData, compile, CompiledCode, makeIsDataIndexed )
 import Utilities                ( writeCodeToFile, wrapPolicy, wrapValidator )
 import Prelude                  ( IO )

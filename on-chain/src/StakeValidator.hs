@@ -14,24 +14,25 @@ import Utilities                    ( writeCodeToFile, wrapValidator )
 import Prelude                      ( IO )
 import PlutusLedgerApi.V2           ( ScriptContext(..), TxOutRef, ScriptPurpose(..), TxOutRef(..) )
 
--- [General notes on this file]
--- This file contains one plutus validator, namely the logic of the script that holds someone's staked value.
--- Together with this staked value locked, the datum of an output contains a VRF PubKey hash that is
--- used to identify and assign the stake to a PubKey.
---
--- This validator could be upgraded to allow for deligation of stake.
+-- [General notes on this module]
+-- This module includes the `stakeValidator`, a Plutus validator script responsible for governing the unlocking of staked value.
+-- The datum of an output under this script includes a VRF PubKey, serving to associate and allocate the stake to a specific PubKey.
+-- Future improvements could enable delegation of stake and prefent moving stake to quickly.
 
--- The 'Redeemer' of the validator that contains a VRF output and proof to unlock an output
--- at this script below. These two values are associated with input described below.
+-- Auxiliary function and data type definitions ------------------
+
+-- The 'Redeemer' structure for the validator contains a VRF output and proof, which are needed to unlock an output
+-- secured by this script.
 data Redeemer = Redeemer {
     output :: Output,
     proof  :: Proof
 }
 makeIsDataIndexed ''Redeemer [('Redeemer,0)]
 
--- The 'stakeValidator', value here can be unlocked by a valid VRF proof of this PubKey in the datum
--- over the input of the transaction ref that created this output, concatenated with the lower bound
--- of the transaction interval (this must be bounded on both sides).
+-- The 'stakeValidator' function verifies that a value can be unlocked by checking a valid VRF proof 
+-- for the PubKey in the datum. The input to the VRF is created by concatenating the transaction reference 
+-- that created this output with the VRF public key.
+
 {-# INLINABLE  stakeValidator #-}
 stakeValidator :: PubKey -> Redeemer -> ScriptContext -> Bool
 stakeValidator (PubKey pk) Redeemer{output,proof} ctx = checkVRF
