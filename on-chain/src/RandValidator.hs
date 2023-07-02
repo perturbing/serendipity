@@ -87,10 +87,15 @@ randValidator stakeSymbol dtm red ctx = case red of
 
         -- Check here that the datum of the created request output is the hash of the output (the ouput is below a threshold so not entropic enough)
         checkRequestOutput :: TxOut -> Output -> Bool
-        checkRequestOutput TxOut{txOutDatum} (Output bs) = txOutDatum == OutputDatumHash h && isJust (findDatum h txInfo)
-            where
-                h = DatumHash (blake2b_256 bs)
-
+        checkRequestOutput TxOut{txOutDatum} (Output bs) = case txOutDatum of
+          NoOutputDatum -> False
+          OutputDatumHash (DatumHash h) -> case findDatum (DatumHash h) txInfo of
+                                            Nothing -> False
+                                            Just (Datum bd) -> case fromBuiltinData bd of
+                                                Nothing -> False
+                                                Just bs' -> bs' == blake2b_256 bs
+          OutputDatum _ -> False
+            
         -- Check here that the value of the create request output is 10 ada less than the input value.
         checkValueConserved :: Bool
         checkValueConserved = requestValueIn == txOutValue requestOutput <> singleton adaSymbol adaToken 10000000

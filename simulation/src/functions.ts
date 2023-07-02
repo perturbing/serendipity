@@ -28,6 +28,37 @@ export function intToUint8Array(num: number): Uint8Array {
     return arr;
 }
 
+function toAddress(address: Types.Address): L.Address {
+    const paymentCredential = (() => {
+      if ("PubKeyCredential" in address.addressCredential) {
+        return lucid.utils.keyHashToCredential(
+          address.addressCredential.PubKeyCredential[0],
+        );
+      } else {
+        return lucid.utils.scriptHashToCredential(
+          address.addressCredential.ScriptCredential[0],
+        );
+      }
+    })();
+    const stakeCredential = (() => {
+      if (!address.addressStakingCredential) return undefined;
+      if ("StakingHash" in address.addressStakingCredential) {
+        if ("PubKeyCredential" in address.addressStakingCredential.StakingHash[0]) {
+          return lucid.utils.keyHashToCredential(
+            address.addressStakingCredential.StakingHash[0].PubKeyCredential[0],
+          );
+        } else {
+          return lucid.utils.scriptHashToCredential(
+            address.addressStakingCredential.StakingHash[0].ScriptCredential[0],
+          );
+        }
+      } else {
+        return undefined;
+      }
+    })();
+    return lucid.utils.credentialToAddress(paymentCredential, stakeCredential);
+}
+
 lucid.selectWalletFromSeed(secretSeeds[0]);
 
 const TxID = L.Data.Bytes();
@@ -209,6 +240,7 @@ export async function requestRand(): Promise<L.TxHash> {
     return signedTx.submit();
 }
 
+
 export async function requestRandCancel(): Promise<L.TxHash> {
     const addr: L.Address = await lucid.wallet.address();
     const pkh: string = L.getAddressDetails(addr).paymentCredential.hash;
@@ -234,6 +266,12 @@ export async function requestRandCancel(): Promise<L.TxHash> {
 
 }
 
+const ReqRedeemer = L.Data.Enum([
+    L.Data.Literal("Cancel"),
+    L.Data.Object({ Mint: L.Data.Tuple([Redeemer]) })
+]);
+type ReqRedeemer = L.Data.Static<typeof ReqRedeemer>;
+
 // spend requested randomness UTxO with a given UTxO in a wallet of validator given by id.
 export async function createRand(slotnr:number,valUtxo:L.UTxO,reqUtxo:L.UTxO,stakeUtxo:L.UTxO,id:number): Promise<L.TxHash> {
     lucid.selectWalletFromSeed(secretSeeds[id+1]);
@@ -241,21 +279,32 @@ export async function createRand(slotnr:number,valUtxo:L.UTxO,reqUtxo:L.UTxO,sta
     const input: Types.Input = {input: reqUtxo.txHash +  L.toHex(intToUint8Array(time / 100000))};
     const [output,proof] = await VRF.vrf_proof(input, validators[id].privateKey);
     
-    const redeemer: Redeemer = {output: output , proof: proof};
+    const dtm = await lucid.provider.getDatum(reqUtxo.datumHash);
+    const datum: ReqDatum = L.Data.from<ReqDatum>(dtm,ReqDatum);
+    const reqAddr: L.Address = toAddress(datum.address);
+    const newValue = {...reqUtxo.assets, lovelace: reqUtxo.assets.lovelace - 10000000n}
+
+    const red: Redeemer = {output: output , proof: proof};
+    const redeemer: ReqRedeemer = {Mint: [red]}
     const vrfProofTkn: L.Unit = L.toUnit(alwaysFreePol,L.fromText("VRF mint counter"));
     const tx = lucid
       .newTx()
       .collectFrom([valUtxo])
-      .collectFrom([reqUtxo], L.Data.to<Redeemer>(redeemer,Redeemer))
+      .collectFrom([reqUtxo], L.Data.to<ReqRedeemer>(redeemer,ReqRedeemer))
       .attachSpendingValidator(randValidator)
       .readFrom([stakeUtxo])
+      .payToContract(
+        reqAddr,
+        L.Data.to( L.toHex(L.C.hash_blake2b256(L.fromHex(output.output))) ),
+        newValue
+      )
     //   .mintAssets({[vrfProofTkn]:1n}, L.Data.void())
     //   .attachMintingPolicy(alwaysFreeMint)                 -- Enable this for testing and keeping track of the stochastic nature of the POS protocol.
       .validFrom(time)
       .validTo(time+100*1000)
     const finalTx = await tx.complete({coinSelection: false});
     const signedTx = await finalTx.sign().complete();
-   
+
     return signedTx.submit();
 }
 
@@ -280,3 +329,26 @@ export async function filterUTxOs(stake:bigint,utxos:L.UTxO[],id:number): Promis
   
     return filteredObjects.filter((utxo) => utxo !== null) as L.UTxO[];
 }
+
+
+// const test: ReqRedeemer = "Cancel";
+// // console.log(L.Data.to<ReqRedeemer>(test,ReqRedeemer))
+// // console.log(L.Data.to(new L.Constr(0,[])))
+
+// const input: Types.Input = {input: "11" };
+// const [output,proof] = await VRF.vrf_proof(input, validators[0].privateKey);
+// const red: Redeemer = {output: output , proof: proof}
+// const test2: ReqRedeemer = {Mint: [red]}
+// // console.log(test2)
+// // console.log(L.Data.to<ReqRedeemer>(test2,ReqRedeemer))
+
+
+
+
+
+// const utxoAtReqScript: L.UTxO[] = await lucid.utxosAt(randAddress);
+// const dtm = await lucid.provider.getDatum(utxoAtReqScript[0].datumHash)
+// const datum: ReqDatum = L.Data.from<ReqDatum>(dtm,ReqDatum)
+// // console.log(toAddress(datum.address))
+// const newValue = {...utxoAtReqScript[0].assets, lovelace: utxoAtReqScript[0].assets.lovelace - 10000000n}
+// console.log(newValue)
