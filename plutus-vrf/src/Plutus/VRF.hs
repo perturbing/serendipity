@@ -59,7 +59,6 @@ makeIsDataIndexed ''Proof [('Proof,0)]
 -- Or replace the ECDSA with a BLS signature (this preserves the uniqueness property).
 {-# INLINEABLE verifyVRF #-}
 verifyVRF :: Input -> Output -> PubKey -> Proof -> Bool
--- verifyVRF (Input inBs) (Output outBs) (PubKey pk) _ = outBs == blake2b_256 (inBs <> pk)
 verifyVRF (Input inBs) (Output outBs) (PubKey pk) (Proof (Gamma gammaBs) (ZKProof proofBs)) =
      traceIfFalse "VRF-Fail: ECDSA" (verifyEcdsaSecp256k1Signature pk gammaBs proofBs) &&      -- verify that proofBs is a valid signature of the msg hash gammaBs under pk.
      traceIfFalse "VRF-Fail: msg not input hash" (gammaBs == sha2_256 (inBs <> pk)) &&         -- verify that the msg that was signed, is inBs concatenated with the pk.
